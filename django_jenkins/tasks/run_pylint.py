@@ -14,6 +14,20 @@ from pylint import lint
 from pylint.reporters.text import ParseableTextReporter
 
 
+# Workaround to make pylint reports containing non-ASCII symbols being
+# successfully written to files even in ASCII system environment
+class UnicodeFriendlyReporter(ParseableTextReporter):
+
+    def set_output_encoding(self, output_encoding):
+        # if encoding is set explicitly,
+        # then monkeypatch "encode" method again
+        # (see pylint.reporters.BaseReporter.set_output)
+        def encode(string):
+            if isinstance(string, unicode):
+                return string.encode(output_encoding)
+            return string
+        self.encode = encode
+
 class Task(BaseTask):
     option_list = [make_option("--pylint-rcfile",
                                dest="pylint_rcfile",
@@ -43,8 +57,9 @@ class Task(BaseTask):
         if self.errors_only:
             args += ['--errors-only']
         args += get_apps_under_test(self.test_labels, self.test_all)
-
-        lint.Run(args, reporter=ParseableTextReporter(output=self.output), exit=False)
+        reporter = UnicodeFriendlyReporter(output=self.output)
+        reporter.set_output_encoding('utf-8')
+        lint.Run(args, reporter=reporter, exit=False)
 
         return True
 
